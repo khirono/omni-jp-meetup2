@@ -1,0 +1,20 @@
+graph TB
+  subgraph upfd
+    n4[[n4]]
+    updk[[updk]]
+    libgtp5gnl[[libgtp5gnl]]
+    n4 --> updk
+    updk --> libgtp5gnl
+  end
+
+  RAN((RAN))
+  DN((DN))
+  SMF(SMF)
+  UPF(UPF)
+  gtp5g(gtp5g)
+
+  SMF -. N4 PFCP .-> n4
+  RAN -. N3 GTP-U ....-> gtp5g
+  libgtp5gnl -- netlink --> gtp5g
+  gtp5g -. N6 IP .-> DN
+  gtp5g -. N9 GTP-U .-> UPF

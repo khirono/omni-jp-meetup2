@@ -1,0 +1,31 @@
+graph TB
+  subgraph SMF
+    router{router}
+    pdusession[[pdusession]]
+    callback[[callback]]
+    oam[[oam]]
+    pfcp[[pfcp]]
+
+    producer[[producer]]
+    consumer[[consumer]]
+
+    router -. nsmf-pdusession .-> pdusession
+    router -. nsmf-callback .-> callback
+    router -. nsmf-oam .-> oam
+
+    pdusession --> producer
+    callback --> producer
+    oam --> producer
+    
+    pfcp --> producer
+    
+    producer --> consumer
+  end
+
+  NFs(NFs)
+  UPF(UPF)
+  oNFs(NFs)
+
+  NFs -. SBI .-> router
+  pfcp -. PFCP ...- UPF
+  consumer -. SBI .-> oNFs

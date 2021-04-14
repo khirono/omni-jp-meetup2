@@ -1,0 +1,28 @@
+graph TB
+  subgraph Go
+    AMF(AMF)
+    SMF(SMF)
+    AUSF(AUSF)
+    NSSF(NSSF)
+    UDM(UDM)
+    UDR(UDR)
+    PCF(PCF)
+    NRF(NRF)
+  end
+
+  subgraph C
+    UPF(UPF)
+  end
+
+  SBI((SBI))
+
+  SBI -.- AMF
+  SBI -.- SMF
+  SBI -.- AUSF
+  SBI -.- NSSF
+  SBI -.- UDM
+  SBI -.- UDR
+  SBI -.- PCF
+  SBI -.- NRF
+
+  SMF -. PFCP .- UPF

@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Open Mobile Network Infra Meetup #2 free5GCの構造と特徴</title>
+    <link rel="stylesheet" href="dist/reset.css">
+    <link rel="stylesheet" href="dist/reveal.css">
+    <link rel="stylesheet" href="dist/theme/mytheme.css" id="theme">
+
+    <!-- Theme used for syntax highlighted code -->
+    <link rel="stylesheet" href="plugin/highlight/monokai.css" id="highlight-theme">
+
+    <link rel="stylesheet" href="plugin/menu/menu.css">
+
+    <script src="dist/mermaid.min.js"></script>
+
+    <style>
+    .reveal .slides {
+      text-align: left;
+    }
+    .reveal section > ul {
+      margin-bottom: 1em;
+    }
+    .reveal section .mermaid svg {
+      max-width: calc(60vw);
+      max-height: calc(60vh);
+    }
+    .reveal.reveal img {
+      border: none;
+      box-shadow: none;
+      max-height: calc(60vh);
+      max-width: calc(60vw);
+    }
+    .reveal section .col {
+      display: inline-block;
+      width: 46%;
+      vertical-align: top;
+    }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+
+        <section>
+          <h1>free5GCの構造と特徴</h1>
+          <p>2021-4-13</p>
+          <p>hirono</p>
+          <aside class="notes">
+            <p>ではよろしくお願いいたします。</p>
+            <p>本日のmeetupの前半では、free5GCの外部動作についてのお話があったかと思いますが、
+            私の方はfree5GCの内部の構造とその構造から見た特徴についてお話をさせて頂きます。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>自己紹介</h2>
+          <h3>広納幸治 / HIRONO Koji</h3>
+          <h4>APRESIA Systems株式会社</h4>
+          <ul>
+            <li>
+              2019年11月から5GのコアやRANのソフトウェア開発に関わる
+              <ul>
+                <li>無線の知識0からのスタート</li>
+              </ul>
+            </li>
+          </ul>
+          <h4>スタイル</h4>
+          <ul>
+            <li>ソフトウェアで解決する</li>
+            <li>世の中にないものは自分で作る</li>
+            <li>あらゆる策を考えた上で正面突破</li>
+          </ul>
+          <aside class="notes">
+            <p>まずは自己紹介になります。</p>
+
+            <p>ひろのこうじです。</p>
+            <p>APRESIA Systemsに所属しておりまして、2019年11月から5GのコアやRANの開発に関わりました。
+            無線の領域というのはまったくの経験がなく知識0からのスタートでした。
+            3GPPの規格やOSSの実装をひたすら読みまして、
+            今現在は、なんとかわかるようになってきたところです。</p>
+
+            <p>私の気質や行動スタイルは主に3つあります。</p>
+
+            <p>まず1つ目は、私自身はソフトウェアの技術者ということもあって、ものごとをソフトウェアで解決する傾向があります。</p>
+
+            <p>2つ目は、ソフトウェアを作るにあたって、既存の3rd party製のライブラリやフレームワークを使うこともあるんですが、
+            かゆいところにに手が届かないことも多く、足りない部分は自分で作ってしまうという特徴があります。</p>
+
+            <p>最後に3つ目は、既存のものプラスアルファでつけ足しつけ足ししていくこともあるんですが、
+            全部捨てて0ベースで自分で作ってしまうこともあります。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>Agenda</h2>
+          <ol>
+            <li>UPFを除くNFは全部Webサーバーアプリ</li>
+            <li>Goの特徴</li>
+            <li>データベースはMongoDB</li>
+            <li>設定はYAML</li>
+            <li>UEの登録は専用のWeb UI</li>
+            <li>ディレクトリ構成は独自方式</li>
+            <li>AMFの構造</li>
+            <li>SMFの構造</li>
+            <li>UPFの構造</li>
+            <li>gtp5gのパケットの流れ(Uplink)</li>
+            <li>gtp5gのパケットの流れ(Downlink from DN)</li>
+            <li>gtp5gのパケットの流れ(Downlink from UPF)</li>
+            <li>商用利用の障壁だった過去</li>
+            <li>まとめ</li>
+          </ol>
+          <aside class="notes">
+            <p>本日のAgendaです。</p>
+
+            <p>最初の1.から6.まではfree5GC全般の特徴について、
+            7.から12.まではNFの中から特徴的な3つ(AMF, SMF, UPF)の構造について、
+            13.では商用利用について、そして最後にまとめの順でお話させて頂きます。</p>
+
+            <p>では、最初にfree5GC全般の特徴について</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>1. UPFを除くNFは全部Webサーバーアプリ</h2>
+          <img src="img/nfs.svg">
+          <ul>
+            <li>
+              UPF以外のNF
+              <ul>
+                <li>Goで実装</li>
+                <li>無線の知識不要</li>
+                <li>Webサーバーアプリの知識があれば作れる</li>
+              </ul>
+            </li>
+            <li>
+              UPF
+              <ul>
+                <li>Cで実装</li>
+              </ul>
+            </li>
+          </ul>
+          <aside class="notes">
+            <p>最初の特徴は、「UPFを除くNFは全部Webサーバーアプリ」という点です。</p>
+
+            <p>図は、free5GCのNFをグループ分けしたものです。</p>
+
+            <p>UPFは、Cで実装されていまして、SMFとだけ繋がっています。</p>
+
+            <p>UPFを除くNFは、すべてGoで実装されておりまして、
+            SBIを提供するためWebサーバーアプリのような作りになっています。
+            この部分は「無線」とは完全独立したもので、「無線」の知識がなくても作れる部分です。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>2. Goの特徴</h2>
+          <ul>
+            <li>
+              高いスケーラビリティ
+              <ul>
+                <li>goroutineによるM:Nスレッドモデル
+              </ul>
+                </li>
+                <li>
+                  高い生産性
+                  <ul>
+                    <li>標準パッケージが充実</li>
+                    <li>数行でHTTPサーバーが動く</li>
+                  </ul>
+                </li>
+          </ul>
+          <pre><code class="golang" data-trim contenteditable style="font-size: 18px;">
+package main
+
+import (
+    "net/http"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    w.WriteHeader(http.StatusOK)
+}
+
+func main() {
+    http.HandleFunc("/", handler)
+    http.ListenAndServe(":8080", nil)
+}
+          </code></pre>
+          <aside class="notes">
+            <p>ご存知の方も多いかも知れませんが、「Goの特徴」について簡単にご説明いたします。</p>
+
+            <p>GoはgoroutineによるM:Nスレッドモデルを採用していまして、スケーラビリティが高い特徴があります。</p>
+
+            <p>それから、標準パッケージが充実していまして、数行でHTTPのサーバーが実装できてしまう生産性の高さも特徴の1つです。</p>
+
+            <p>ここに書いた数行でHTTP/2に対応したサーバーが動きます。</p>
+
+            <p>free5GCがStage2でCからGoに乗り換えたのは理にかなっていると考えています。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>3. データベースはMongoDB</h2>
+          <img class="col" src="img/mongodb.svg">
+          <ul class="col">
+            <li>
+              MongoDBの特徴
+              <ul>
+                <li>スキーマの事前定義不要</li>
+                <li>事前の初期化は不要</li>
+              </ul>
+            </li>
+            <li>
+              MongoDBに接続するNF
+              <ol>
+                <li>NRF</li>
+                <li>UDR</li>
+                <li>PCF</li>
+                <li>webconsole</li>
+              </ol>
+            </li>
+          </ul>
+          <aside class="notes">
+            <p>つづいては「データベースはMongoDB」という点です。</p>
+
+            <p>図は、MongoDBに接続するNFとその間のパッケージの構造を示すものです。</p>
+
+            <p>MongoDBに接続するNFはNRF, UDR, PCF, webconsoleの4つです。
+            各NFは、MongoDBLibraryという名前のパッケージを利用して、
+            標準のmongo-driverを通ってMongoDBにアクセスします。</p>
+
+            <p>MongoDBは、スキーマの事前定義は不要で、事前の初期化も不要という特徴があります。</p>
+
+            <p>SQLではなくNoSQLのMongoDBを採用したのはスケーラビリティという観点もありますが、
+            この2つの特徴が主な要因だったのではないかと思います。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>4. 設定はYAML</h2>
+          <img src="img/yaml1.svg">
+          <ul>
+            <li>NF毎に設定ファイルを保持</li>
+            <li>設定する内容が重複する部分もあるがNFを別ホストで分離することを考えると妥当</li>
+            <li>起動した後に変更は不可</li>
+          </ul>
+          <aside class="notes">
+            <p>つづいての特徴は「設定はYAML」という点です。</p>
+
+            <p>NF毎にそれぞれ設定ファイルを保有していまして、起動時に読み込んで内部のデータに保存します。
+            起動後の変更は不可能です。</p>
+
+            <p>設定する内容が重複する部分もあり、手間がかかるのですが、
+            NFを別ホストで分離することを考えると仕方がないのかなと思います。</p>
+
+            <p>この制約は運用において厳しい面があるので、
+            今後改善するべきポイントの1つと考えています。
+            近い将来、動的に変更できるようになるかも知れません。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>5. UEの登録は専用のWeb UI</h2>
+          <img class="col" src="img/webui.svg">
+          <ul class="col">
+            <li>
+              frontend
+              <ul>
+                <li>Reactで実装</li>
+              </ul>
+            </li>
+            <li>
+              backend
+              <ul>
+                <li>Goで実装</li>
+                <li>MongoDBに直接接続</li>
+                <li>
+                  UEの状態取得
+                  <ul>
+                    <li>namf-oam</li>
+                    <li>nsmf-oam</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+          <aside class="notes">
+            <p>つづいての特徴は「UEの登録は専用のWeb UI」です。</p>
+
+            <p>先ほどの説明で設定はYAMLで起動後の変更は不可とお話しましたが、
+            UEの設定は、専用のWeb UIを通してデータベースに保存され、
+            動的に変更が可能です。</p>
+
+            <p>frontendはReactで実装されていまして、backendはGoで実装されています。</p>
+
+            <p>MongoDBに直接接続していまして、原則として他のNFとはやりとりしない構造になっています。</p>
+
+            <p>ただし、例外として、UEの状態取得についてはAMF, SMFから情報収集しています。
+            この時に使われるプロトコルは3GPPにない専用のOAMサービスを使っています。</p>
+
+            <p>webconsoleは、自由度が高く独自実装、独自拡張しやすい構造といえます。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>6. ディレクトリ構成は独自方式</h2>
+          <h3>Linuxの標準的な構成(FHS準拠)ではない</h3>
+          <ul>
+            <li>
+              Linuxの標準的な構成(FHS準拠)
+              <ul>
+                <li>実行ファイルは/usr/bin配下
+                  <li>設定ファイルは/usr/etc配下
+              </ul>
+                  </li>
+                  <li>
+                    free5GCの構成
+                    <ul>
+                      <li>"free5gc"という名前のルートノード必須</li>
+                      <li>
+                        ソースコードのあらゆる箇所で埋め込まれている
+                        <pre><code class="console" data-trim contenteditable style="font-size: 12px;">
+$ grep -r Free5gcPath .
+./amf/service/init.go:          DefaultAmfConfigPath := path_util.Free5gcPath("free5gc/config/amfcfg.yaml")
+./amf/util/path.go:     AmfLogPath           = path_util.Free5gcPath("free5gc/amfsslkey.log")
+./amf/util/path.go:     AmfPemPath           = path_util.Free5gcPath("free5gc/support/TLS/amf.pem")
+./amf/util/path.go:     AmfKeyPath           = path_util.Free5gcPath("free5gc/support/TLS/amf.key")
+./amf/util/path.go:     DefaultAmfConfigPath = path_util.Free5gcPath("free5gc/config/amfcfg.yaml")
+./amf/util/path_debug.go:       AmfLogPath           = path_util.Free5gcPath("free5gc/amfsslkey.log")
+./amf/util/path_debug.go:       AmfPemPath           = path_util.Free5gcPath("free5gc/support/TLS/_debug.pem")
+./amf/util/path_debug.go:       AmfKeyPath           = path_util.Free5gcPath("free5gc/support/TLS/_debug.key")
+./amf/util/path_debug.go:       DefaultAmfConfigPath = path_util.Free5gcPath("free5gc/config/amfcfg.yaml")
+
+...(snip)...
+                        </code></pre>
+                      </li>
+                    </ul>
+                  </li>
+          </ul>
+          <aside class="notes">
+            <p>つづいての特徴は「ディレクトリ構成は独自方式」です。</p>
+
+            <p>free5GCのディレクトリ構成は、Linuxの標準的な構成ではなく、独自の構成になっています。
+            Linuxの標準的な構成ですと、実行ファイルは/usr/bin配下に置き、
+            設定ファイルは/usr/etc配下に置くといった形になるんですが、
+            free5GCの場合は、必ず"free5gc"という名前のディレクトリ配下に置く必要があります。</p>
+
+            <p>"free5gc"という名前のルートノードがソースコードのあらゆる箇所で埋め込まれていまして、
+            ここを修正するのも一筋縄ではいかない形になっています。</p>
+
+            <p>"free5gc"という名前を省略できないように、
+            この不自由さはあえて仕組まれたものではないかと個人的には邪推しています。</p>
+          </aside>
+        </section>
+
+        <section class="diagram-slide">
+          <h2>7. AMFの構造</h2>
+          <img class="col" src="img/amf.svg">
+          <ul class="col">
+            <li>
+              router
+              <ul>
+                <li>サービス毎に振り分け</li>
+              </ul>
+            </li>
+            <li>
+              producer
+              <ul>
+                <li>内部データを保持</li>
+                <li>外部からのリクエストに対して最終的に処理</li>
+              </ul>
+            </li>
+            <li>
+              consumer
+              <ul>
+                <li>外部へのリクエストを処理</li>
+              </ul>
+            </li>
+            <li>
+              gmm
+              <ul>
+                <li>5GMMを実現</li>
+                <li>状態遷移マシン</li>
+              </ul>
+            </li>
+          </ul>
+          <aside class="notes">
+            <p>ここからは、NFの構造についてお話しさせて頂きます。</p>
+
+            <p>まず「AMFの構造」です。</p>
+
+            <p>図は、AMF内部の主要なパッケージについての関係を示すものです。</p>
+
+            <p>他のNFからSBIを通してサービスのリクエストがあった場合、
+            一旦、routerで受け、mt, location, oamといったサービス毎に振り分けます。
+            サービス毎のパッケージは直接内部データにはアクセスせずに、
+            producerに問い合わせを行います。producerは、AMFで管理する内部データを一元管理していまして、
+            サービスパッケージからの要求を処理します。</p>
+
+            <p>RAN側からのC-Planeのやりとりは、ngapで受け、nasを通してUE毎の状態管理を行うgmmで処理します。
+            gmmでは、場合によっては、外部サービスの呼び出しを行うためにconsumerに問い合わせを行います。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>8. SMFの構造</h2>
+          <img class="col" src="img/smf.svg">
+          <ul class="col">
+            <li>
+              router
+              <ul>
+                <li>サービス毎に振り分け</li>
+              </ul>
+            </li>
+            <li>
+              producer
+              <ul>
+                <li>内部データを保持</li>
+                <li>外部からのリクエストに対して最終的に処理</li>
+              </ul>
+            </li>
+            <li>
+              consumer
+              <ul>
+                <li>外部へのリクエストを処理</li>
+              </ul>
+            </li>
+            <li>
+              pfcp
+              <ul>
+                <li>UPFとPFCPをやりとり</li>
+              </ul>
+            </li>
+          </ul>
+          <aside class="notes">
+            <p>つづいて「SMFの構造」です。</p>
+
+            <p>図は、SMF内部の主要なパッケージについての関係を示すものです。</p>
+
+            <p>基本的な構成はAMFと同じです。</p>
+
+            <p>他のNFからSBIを通してサービスのリクエストがあった場合、
+            一旦、routerで受け、pdusession, callback, oamといったサービス毎に振り分けます。
+            サービス毎のパッケージは直接内部データにはアクセスせずに、
+            producerに問い合わせを行います。producerは、SMFで管理する内部データを一元管理していまして、
+            サービスパッケージからの要求を処理します。</p>
+
+            <p>producerでは、場合によって、外部サービスの呼び出しを行うためにconsumerに問い合わせを行います。</p>
+
+            <p>UPFとPFCPでやりとりする部分は、pfcpというパッケージで処理します。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>9. UPFの構造</h2>
+          <img class="col" src="img/upf.svg">
+          <ul class="col">
+            <li>
+              upfd
+              <ul>
+                <li>
+                  n4
+                  <ul>
+                    <li>SMFとPFCPをやりとり</li>
+                  </ul>
+                </li>
+                <li>
+                  updk
+                  <ul>
+                    <li>PFCPを内部データに変換</li>
+                  </ul>
+                </li>
+                <li>
+                  libgtp5gnl
+                  <ul>
+                    <li>netlinkを経由してgtp5gにPFCPを設定</li>
+                    <li>libgtpnlからfork</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li>
+              gtp5g
+              <ul>
+                <li>カーネルモジュール</li>
+                <li>U-Planeのパケットを転送</li>
+                <li>stage2の途中から登場</li>
+              </ul>
+            </li>
+          </ul>
+          <aside class="notes">
+            <p>つづいて「UPFの構造」です。</p>
+
+            <p>図は、UPF内部の主要なコンポーネントについての関係を示すものです。</p>
+
+            <p>AMF, SMFと違って、UPFはCで実装されていまして、大きく2つの主要なコンポーネントに分かれています。
+            1つはupfdと呼ばれるユーザーランドで動作するデーモン、
+            もう1つはgtp5gと呼ばれるカーネルランドで動作するカーネルモジュールです。</p>
+
+            <p>upfdは主にSMFとPFCPのやりとりをメインとしていまして、
+            PFCPの内容をかみくだいて、最終的にgtp5gに設定する役割を持っています。</p>
+
+            <p>gtp5gはU-planeのパケットを転送するカーネルモジュールでして、stage2の途中から登場したものです。
+            それまではLinuxに付属しているgtpカーネルモジュールを利用していました。</p>
+
+            <p>upfdとgtp5gの間はnetlinkでやりとりされます。</p>
+
+            <p>netlinkのやりとりを行う部分は、libgtp5gnlになっています。
+            これもgtp5gの登場と同様、libgtpnlからforkされたものです。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>10. gtp5gのパケットの流れ(Uplink)</h2>
+          <img class="col" src="img/gtp5g_uplink.svg">
+          <ul class="col">
+            <li>
+              gtp5g_encap_recv
+              <ul>
+                <li>udp_tunnelからコールバック</li>
+              </ul>
+            </li>
+            <li>
+              gtp1u_udp_encap_recv
+              <ul>
+                <li>受信パケットのチェック</li>
+                <li>PDRの検索</li>
+              </ul>
+            </li>
+            <li>
+              gtp5g_rx
+              <ul>
+                <li>FARに従って処理</li>
+              </ul>
+            </li>
+            <li>
+              gtp5g_fwd_skb_encap
+              <ol>
+                <li>
+                  DN
+                  <ul>
+                    <li>GTPデカプセル</li>
+                    <li>netif_rxで転送</li>
+                  </ul>
+                </li>
+                <li>
+                  後段UPF
+                  <ul>
+                    <li>ヘッダー書き換え</li>
+                    <li>ip_xmitで転送</li>
+                  </ul>
+                </li>
+              </ol>
+            </li>
+          </ul>
+          <aside class="notes">
+            <p>次からはUPFのモジュールgtp5gのパケットの流れを追って見ていきたいと思います。</p>
+
+            <p>まず「Uplink」から</p>
+
+            <p>図はRAN側からUplink方向のパケットを受信した場合の流れを示すものです。</p>
+
+            <p>gtp5gはudp_tunnelを利用していまして、まずはここでパケットを受信します。</p>
+
+            <p>それからudp_tunnelで登録しているコールバック関数のgtp5g_encap_recvが呼ばれまして、
+            gtp1u_udp_encap_recvが呼ばれます。
+            gtp1u_udp_encap_recvでは、受信パケットのチェックやPDRの検索を行います。</p>
+
+            <p>それから、gtp5g_rxが呼ばれまして、ここでFARに従って処理されます。
+            gtp5g_fwd_skb_encapでは、分岐がありまして、
+            N6のDN側に転送する場合と、
+            N9のUplink Classifierで多段UPFを組んだ場合の後段UPFに転送する場合の2パターンあります。</p>
+
+            <p>DNに抜ける方はGTPデカプセルしてnetif_rxでLinuxプロトコルスタック側に転送。
+            後段UPFに転送する場合は、GTPヘッダーを書き換えてip_xmitで転送します。</p>
+
+            <p>これがUplinkの流れになります。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>11. gtp5gのパケットの流れ(Downlink from DN)</h2>
+          <img class="col" src="img/gtp5g_downlink_dn.svg">
+          <ul class="col">
+            <li>
+              gtp5g_dev_xmit
+              <ul>
+                <li>エントリポイント</li>
+              </ul>
+            </li>
+            <li>
+              gtp5g_handle_skb_ipv4
+              <ul>
+                <li>PDRの検索</li>
+                <li>FARに従って処理</li>
+                <li>pktinfoの組み立て</li>
+              </ul>
+            </li>
+            <li>
+              gtp5g_xmit_skb_ipv4
+              <ul>
+                <li>pktinfoに従って転送</li>
+                <li>udp_tunnel_xmit_skbでGTPカプセル</li>
+              </ul>
+            </li>
+          </ul>
+          <aside class="notes">
+            <p>つづいて「Downlink」です。</p>
+            <p>「Downlink」は2パターンありまして、
+            最初にDNから受信する場合の流れについて見ていきます。</p>
+
+            <p>DNからIPパケットを受信した場合は、gtp5g_dev_xmitが呼ばれます。
+            ここはエントリポイントとなっていまして、実際の処理は次の2つの関数で行っています。
+            gtp5g_handle_skb_ipv4で、PDRを検索し、FARに従って処理します。
+            ただし、ここではパケット転送処理は行わず、pktinfoの組み立てのみ実施します。</p>
+
+            <p>つづくgtp5g_xmit_skb_ipv4では、pktinfoの情報からudp_tunnelを利用して、
+            GTPカプセル化して転送します。</p>
+
+            <p>これがDNからのDownlinkの流れになります。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>12. gtp5gのパケットの流れ(Downlink from UPF)</h2>
+          <img class="col" src="img/gtp5g_downlink_upf.svg">
+          <div class="col">
+            <h3>Uplinkと同じ関数を通る</h3>
+            <ul>
+              <li>
+                gtp5g_encap_recv
+                <ul>
+                  <li>udp_tunnelからコールバック</li>
+                </ul>
+              </li>
+              <li>
+                gtp1u_udp_encap_recv
+                <ul>
+                  <li>受信パケットのチェック</li>
+                  <li>PDRの検索</li>
+                </ul>
+              </li>
+              <li>
+                gtp5g_rx
+                <ul>
+                  <li>FARに従って処理</li>
+                </ul>
+              </li>
+              <li>
+                gtp5g_fwd_skb_encap
+                <ul>
+                  <li>ヘッダー書き換え</li>
+                  <li>ip_xmitで転送</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+          <aside class="notes">
+            <p>つづいて、2つ目のパターン「後段UPFからのDownlink」について見ていきます。</p>
+
+            <p>実は、これ、Uplinkの場合とまったく同じ関数を通ります。</p>
+
+            <p>言い方をかえるとここに挙げた関数は
+            「Uplink、Downlinkどちらか片方だけを前提とした実装をしてはいけない」
+            ということになります。</p>
+
+            <p>ここは非常に混乱するポイントでして、実はfree5GC本家の実装も間違っています。
+            そのうちPull Req出すと思います。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>13. 商用利用の障壁だった過去</h2>
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>過去</th>
+                <th>現在</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th>ソースコード</th>
+                <td>
+                  lib部分はバイナリ提供のみ
+                  <ul>
+                    <li>逆アセンブルで解析は可能</li>
+                    <li>修正は不可能</li>
+                  </ul>
+                </td>
+                <td>全て公開</td>
+              </tr>
+              <tr>
+                <th>ライセンス</th>
+                <td>
+                  <ol>
+                    <li>
+                      アカデミックライセンス
+                      <ul>
+                        <li>商用利用不可</li>
+                      </ul>
+                    </li>
+                    <li>
+                      商用ライセンス
+                      <ul>
+                        <li>別途問い合わせ必要</li>
+                        <li>詳細不明</li>
+                      </ul>
+                    </li>
+                  </ol>
+                </td>
+                <td>
+                  Apache 2.0
+                  <ul>
+                    <li>商用利用しやすい</li>
+                  </ul>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <aside class="notes">
+            <p>さて、ここまでNFの構造について見ていきましたが、
+            最後にfree5GC全般に関わる特徴として、「商用利用の障壁だった過去」についてお話させて頂きます。</p>
+
+            <p>これはもう過去の話で今は解消されている問題なので気にすることはないんですが、
+            こんなことがあったんだという程度で見て頂ければと思います。</p>
+
+            <p>主に問題が2つありました。</p>
+
+            <p>まず1つ目は、ソースコードが一部非開示だった点です。
+            これはlibがバイナリ提供で、ターゲットアーキテクチャはx86_64に限定される上に、
+            不具合があっても自分たちで修正するのは実質不可能な状態でした。</p>
+
+            <p>2つ目は、ライセンスが怪しかった点です。
+            商用利用が不可能なアカデミックライセンスと、
+            詳細不明で別途問い合わせ必要な商用ライセンスの2拓でした。</p>
+
+            <p>どんなにいいものであっても商用利用に支障のある制約があると、どうにもなりません。
+            OSSを活用する上で最も注意するべきポイントかと思います。</p>
+          </aside>
+        </section>
+
+        <section>
+          <h2>14. まとめ</h2>
+          <h3>NFの構造と特徴</h3>
+          <ul>
+            <li>
+              UPFを除くNFはWebサーバーアプリ
+              <ul>
+                <li>無線の知識不要</li>
+                <li>Goによる高い生産性とスケーラビリティ</li>
+              </ul>
+            </li>
+            <li>
+              UPF
+              <ul>
+                <li>専用のカーネルモジュールgtp5gを用意</li>
+              </ul>
+            </li>
+          </ul>
+          <h3>巨人の肩の上にのる矮人</h3>
+          <ul>
+            <li>完成度100%とは言えないがfree5GCをベースとして拡張していけそう</li>
+          </ul>
+          <aside class="notes">
+            <p>最後にまとめです。</p>
+
+            <p>NFの構造と特徴として、
+
+            UPFを除くNFはWebサーバーアプリで、ここは無線の知識がなくても実装可能で、
+            Goにしたことで高い生産性とスケーラビリティが確保できる、という点。</p>
+
+            <p>それから、UPFは専用のカーネルモジュールgtp5gを用意しているという点。</p>
+
+            <p>この2点についてお話させて頂きました。</p>
+
+
+            <p>free5GCは完成度100%とは言えませんが、自分たちで拡張していけそうな感触を持っています。</p>
+
+            <p>「巨人の肩の上にのる矮人」という有名なメタファーがあります。
+            free5GCだけでなく、他のOSSや、時には自分で追加実装して、
+            様々な組み合わせを考えて活用していくことが大事だと考えています。</p>
+
+            <p>一緒に盛り上げていきましょう!</p>
+
+            <p>ご清聴ありがとうございました。</p>
+          </aside>
+        </section>
+
+      </div>
+    </div>
+
+    <script src="dist/reveal.js"></script>
+    <script src="plugin/notes/notes.js"></script>
+    <script src="plugin/markdown/markdown.js"></script>
+    <script src="plugin/highlight/highlight.js"></script>
+    <script src="plugin/menu/menu.js"></script>
+    <script>
+      Reveal.initialize()
+
+      function mermaidSlidesReadyToRender(s) {
+        diag = s.querySelector(".mermaid")
+        if (diag) {
+          background = s.slideBackgroundElement
+          if (!diag.hasAttribute("data-processed") &&
+              background.hasAttribute("data-loaded") &&
+              background.style.display === "block") {
+            return s
+          }
+        }
+        return null
+      }
+
+      function renderMermaidSlides() {
+        dSlides = Reveal.getSlides().filter(mermaidSlidesReadyToRender)
+        dSlides.forEach(item => mermaid.init(item.querySelectorAll(".mermaid")))
+      }
+
+      // render mermaid slides for slides that are ready
+      Reveal.on('slidechanged', event => {
+        renderMermaidSlides()
+      })
+
+      // render mermaid slides for slides that are ready on startup
+      Reveal.initialize({
+        hash: true,
+        slideNumber: 'c/t',
+        disableLayout: false,
+        center: true,
+        plugins: [
+          RevealMarkdown,
+          RevealHighlight,
+          RevealNotes,
+          RevealMenu
+        ],
+        menu: {
+          side: 'left'
+        }
+      }).then(() => {
+        renderMermaidSlides()
+      })
+
+      mermaid.initialize({
+        theme: 'neutral',
+        startOnLoad: false,
+        flowchart: {
+          diagramPadding: 6,
+          htmlLabels: true,
+          curve: 'linear',
+        }
+      })
+    </script>
+  </body>
+</html>

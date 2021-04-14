@@ -1,0 +1,23 @@
+graph TB
+  subgraph gtp5g
+    A[[gtp5g_encap_recv]]
+    B[[gtp1u_udp_encap_recv]]
+    C[[gtp5g_rx]]
+    D[[gtp5g_fwd_skb_encap]]
+
+    A --> B
+    B --> C
+    C --> D
+  end
+
+  RAN((RAN))
+  UPF(UPF)
+
+  udp_tunnel(udp_tunnel)
+
+  E[[ip_xmit]]
+
+  UPF -. N9 GTP-U .-> udp_tunnel
+  udp_tunnel --> A
+  D --> E
+  E -. N3 GTP-U .-> RAN

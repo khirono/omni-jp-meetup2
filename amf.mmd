@@ -1,0 +1,36 @@
+graph TB
+  subgraph AMF
+    ngap[[ngap]]
+    nas[[nas]]
+    gmm[[gmm]]
+    router{router}
+
+    mt[[mt]]
+    location[[location]]
+    oam[[oam]]
+
+    producer[[producer]]
+    consumer[[consumer]]
+
+    ngap --> nas
+    nas --> gmm
+
+    mt --> producer
+    location --> producer
+    oam --> producer
+
+    gmm --> producer
+    gmm --> consumer
+
+    router -. namf-mt .-> mt
+    router -. namf-loc .-> location
+    router -. namf-oam .-> oam
+  end
+
+  RAN((RAN))
+  NFs(NFs)
+  oNFs(NFs)
+
+  RAN -. NGAP .-> ngap
+  NFs -. SBI ..-> router
+  consumer -. SBI .-> oNFs

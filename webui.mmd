@@ -1,0 +1,14 @@
+graph TB
+  subgraph Webブラウザ
+    frontend[[frontend]]
+  end
+
+  backend(backend)
+  AMF(AMF)
+  SMF(SMF)
+  MongoDB[(MongoDB)]
+
+  frontend -. HTTP .-> backend
+  backend -. TCP/Unix domain socket .-> MongoDB
+  backend -. namf-oam .-> AMF
+  backend -. nsmf-oam .-> SMF

@@ -1,0 +1,7 @@
+graph BT
+  smfcfg[(smfcfg.yaml)] -- load --> SMF(SMF)
+  uerouting[(uerouting.yaml)] -- load --> SMF
+  udmcfg[(udmcfg.yaml)] -- load --> UDM(UDM)
+  udrcfg[(udrcfg.yaml)] -- load --> UDR(UDR)
+  upfcfg[(upfcfg.yaml)] -- load --> UPF(UPF)
+  webuicfg[(webuicfg.yaml)] -- load --> webconsole(webconsole)
